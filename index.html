@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetroNebula's Archive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --beige: #F5F5DC; --tan: #D2B48C; --oak: #8B4513; --paper: #FDFBF7; }
+        body { background-color: var(--paper); color: #3E2723; font-family: 'Georgia', serif; }
+        .library-card { background: white; border: 1px solid var(--tan); border-radius: 0.5rem; transition: all 0.2s ease; border-left-width: 4px; }
+        .library-card:hover { transform: translateY(-2px); border-color: var(--oak); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .status-pill { padding: 2px 8px; border-radius: 9999px; font-size: 0.65rem; font-weight: bold; text-transform: uppercase; }
+        #mangaGrid::-webkit-scrollbar { width: 6px; }
+        #mangaGrid::-webkit-scrollbar-thumb { background: var(--tan); border-radius: 10px; }
+    </style>
+</head>
+<body class="p-4">
+
+<div class="max-w-5xl mx-auto">
+    <header class="mb-6 pb-4 border-b-2 border-oak flex justify-between items-center text-stone-800">
+        <div>
+            <h1 class="text-2xl font-bold tracking-tight">RetroNebula's Archive</h1>
+            <p id="syncText" class="text-xs italic text-stone-500">Notion Powered Library</p>
+        </div>
+        <button onclick="loadFromNotion()" class="bg-stone-800 text-white px-5 py-2.5 rounded-md text-sm font-bold shadow-sm hover:bg-stone-700 transition-all active:scale-95">
+            🔄 Refresh Library
+        </button>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+        <aside class="md:col-span-4">
+            <div class="bg-white p-5 rounded-lg border border-tan shadow-sm sticky top-4">
+                <h2 class="text-sm font-bold mb-4 border-b border-stone-100 pb-2 flex items-center">
+                    <span class="mr-2">📊</span> Statistics
+                </h2>
+                <div style="height: 240px;"><canvas id="statusChart"></canvas></div>
+            </div>
+        </aside>
+
+        <main class="md:col-span-8">
+            <div class="mb-4 relative">
+                <input type="text" id="searchInput" oninput="handleSearch()" placeholder="Search titles..." 
+                       class="w-full border border-tan rounded-lg p-3.5 pl-10 text-sm outline-none shadow-sm focus:ring-2 focus:ring-tan/30 transition-all">
+                <span class="absolute left-3.5 top-3.5 text-stone-400">🔍</span>
+            </div>
+            
+            <div id="mangaGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4 h-[70vh] overflow-y-auto pr-2">
+                <!-- Data injected here -->
+            </div>
+        </main>
+    </div>
+</div>
+
+<script>
+    // Since this HTML is hosted on the same domain as the Worker, 
+    // we fetch from /api (or whatever path your index.js is listening to)
+    const API_URL = "/api"; 
+    
+    let mangaData = [];
+    let chartInstance = null;
+
+    async function loadFromNotion() {
+        const grid = document.getElementById("mangaGrid");
+        const syncText = document.getElementById("syncText");
+        
+        grid.innerHTML = `
+            <div class="col-span-full flex flex-col items-center justify-center py-20 text-stone-400">
+                <div class="animate-spin text-3xl mb-4">📖</div>
+                <div class="italic text-sm">Consulting the Notion Archives...</div>
+            </div>`;
+
+        try {
+            const resp = await fetch(API_URL, { 
+                method: 'GET',
+                headers: { 'Accept': 'application/json' }
+            });
+
+            if (!resp.ok) throw new Error(`HTTP Error ${resp.status}`);
+
+            const contentType = resp.headers.get("content-type") || "";
+            if (!contentType.includes("application/json")) {
+                throw new Error("Worker is still returning HTML. Please check the wrangler.jsonc 'main' field.");
+            }
+
+            const data = await resp.json();
+            if (data.error) throw new Error(data.error);
+
+            mangaData = (data.results || []).map(page => ({
+                id: page.id,
+                name: page.properties.Name?.title[0]?.plain_text || "Untitled Entry",
+                status: page.properties.Status?.select?.name || "Plan to Read",
+                ch: page.properties.Chapters?.number || 0 
+            }));
+
+            syncText.innerText = `✨ ${mangaData.length} items synced`;
+            render();
+        } catch (err) {
+            console.error(err);
+            grid.innerHTML = `
+                <div class="col-span-full p-8 bg-red-50 rounded-lg border border-red-200">
+                    <p class="text-red-800 font-bold mb-1">Worker Response Error</p>
+                    <p class="text-red-600 text-xs mb-4 italic">${err.message}</p>
+                    <div class="bg-white p-3 rounded text-[10px] text-gray-500 space-y-2">
+                        <p><b>Configuration Fix Required:</b></p>
+                        <p>1. Move <code>index.html</code> into a folder called <code>public</code>.</p>
+                        <p>2. Move <code>index.js</code> out of <code>functions</code> and into the root.</p>
+                        <p>3. Set <code>"main": "index.js"</code> and <code>"directory": "public"</code> in <code>wrangler.jsonc</code>.</p>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    function render(data = mangaData) {
+        const grid = document.getElementById("mangaGrid");
+        grid.innerHTML = "";
+        
+        data.sort((a, b) => a.name.localeCompare(b.name)).forEach(m => {
+            const card = document.createElement("div");
+            card.className = "library-card p-4 flex flex-col justify-between h-40 " + getBorder(m.status);
+            card.innerHTML = `
+                <div>
+                    <span class="status-pill ${getPill(m.status)}">${m.status}</span>
+                    <h3 class="font-bold text-stone-800 text-sm mt-3 leading-tight line-clamp-2">${m.name}</h3>
+                </div>
+                <div class="flex justify-between items-center text-[11px] text-stone-400 border-t border-stone-50 pt-3 italic">
+                    <span>Progress</span>
+                    <span class="font-bold text-stone-700 bg-stone-100 px-2 py-0.5 rounded">Ch. ${m.ch}</span>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+        updateChart();
+    }
+
+    function getPill(s) {
+        const st = (s || "").toLowerCase();
+        if (st.includes("reading")) return "bg-blue-100 text-blue-700";
+        if (st.includes("read") || st.includes("complete")) return "bg-emerald-100 text-emerald-700";
+        if (st.includes("stalled") || st.includes("hold")) return "bg-orange-100 text-orange-700";
+        return "bg-stone-100 text-stone-600";
+    }
+
+    function getBorder(s) {
+        const st = (s || "").toLowerCase();
+        if (st.includes("reading")) return "border-l-blue-400";
+        if (st.includes("read") || st.includes("complete")) return "border-l-emerald-400";
+        if (st.includes("stalled") || st.includes("hold")) return "border-l-orange-400";
+        return "border-l-stone-300";
+    }
+
+    function handleSearch() {
+        const term = document.getElementById("searchInput").value.toLowerCase();
+        render(mangaData.filter(m => m.name.toLowerCase().includes(term)));
+    }
+
+    function updateChart() {
+        const ctx = document.getElementById("statusChart").getContext("2d");
+        const stats = mangaData.reduce((acc, m) => { 
+            const s = m.status || "Other";
+            acc[s] = (acc[s] || 0) + 1; 
+            return acc; 
+        }, {});
+        
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctx, {
+            type: "doughnut",
+            data: {
+                labels: Object.keys(stats),
+                datasets: [{
+                    data: Object.values(stats),
+                    backgroundColor: ["#80BCBD", "#AAD9BB", "#D5F0C1", "#F9F7C9", "#E5E7EB", "#D2B48C"]
+                }]
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { legend: { position: "bottom", labels: { font: { size: 10 } } } },
+                cutout: "70%"
+            }
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", loadFromNotion);
+</script>
+</body>
+</html>
