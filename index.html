@@ -3,131 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RetroNebula's Archive</title>
+    <title>RetroNebula's Bookshelf</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --beige: #F5F5DC; --tan: #D2B48C; --oak: #8B4513; --paper: #FDFBF7; }
-        body { background-color: var(--paper); color: #3E2723; font-family: 'Georgia', serif; }
-        .library-card { background: white; border: 1px solid var(--tan); border-radius: 0.5rem; transition: all 0.2s ease; border-left-width: 4px; }
-        .library-card:hover { transform: translateY(-2px); border-color: var(--oak); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-        .status-pill { padding: 2px 8px; border-radius: 9999px; font-size: 0.65rem; font-weight: bold; text-transform: uppercase; }
-        #mangaGrid::-webkit-scrollbar { width: 6px; }
-        #mangaGrid::-webkit-scrollbar-thumb { background: var(--tan); border-radius: 10px; }
+        :root { --paper: #FDFBF7; --ink: #2C1810; --gold: #C5A059; --shelf: #5D4037; }
+        body { background-color: var(--paper); color: var(--ink); font-family: 'Georgia', serif; }
+        .book-card { background: white; border: 1px solid #E5E7EB; border-radius: 4px; transition: all 0.3s ease; box-shadow: 2px 2px 0px rgba(0,0,0,0.05); }
+        .book-card:hover { transform: translateY(-3px); box-shadow: 4px 4px 15px rgba(0,0,0,0.1); border-color: var(--gold); }
+        .status-pill { padding: 2px 10px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; }
+        #bookGrid::-webkit-scrollbar { width: 8px; }
+        #bookGrid::-webkit-scrollbar-thumb { background: #D2B48C; border-radius: 4px; }
     </style>
 </head>
-<body class="p-4">
+<body class="p-6">
 
-<div class="max-w-5xl mx-auto">
-    <header class="mb-6 pb-4 border-b-2 border-oak flex justify-between items-center text-stone-800">
+<div class="max-w-6xl mx-auto">
+    <header class="mb-10 pb-6 border-b-4 border-double border-[#5D4037] flex justify-between items-end">
         <div>
-            <h1 class="text-2xl font-bold tracking-tight">RetroNebula's Archive</h1>
-            <p id="syncText" class="text-xs italic text-stone-500">Notion Powered Library</p>
+            <h1 class="text-4xl font-bold tracking-tighter text-[#3E2723]">RetroNebula's Bookshelf</h1>
+            <p id="syncText" class="text-sm font-medium opacity-60 mt-1">Curated Personal Collection</p>
         </div>
-        <button onclick="loadFromNotion()" class="bg-stone-800 text-white px-5 py-2.5 rounded-md text-sm font-bold shadow-sm hover:bg-stone-700 transition-all active:scale-95">
-            🔄 Refresh Library
+        <button onclick="loadFromNotion()" class="bg-[#5D4037] text-[#FDFBF7] px-6 py-2 rounded shadow hover:bg-[#3E2723] transition-colors flex items-center gap-2">
+            <span>📚</span> Refresh Library
         </button>
     </header>
 
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
-        <aside class="md:col-span-4">
-            <div class="bg-white p-5 rounded-lg border border-tan shadow-sm sticky top-4">
-                <h2 class="text-sm font-bold mb-4 border-b border-stone-100 pb-2 flex items-center">
-                    <span class="mr-2">📊</span> Statistics
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <aside class="lg:col-span-3">
+            <div class="bg-white p-6 rounded border border-stone-200 shadow-sm sticky top-6">
+                <h2 class="text-lg font-bold mb-6 flex items-center gap-2 border-b pb-2">
+                    <span>📈</span> Reading Stats
                 </h2>
-                <div style="height: 240px;"><canvas id="statusChart"></canvas></div>
+                <div style="height: 250px;"><canvas id="statusChart"></canvas></div>
             </div>
         </aside>
 
-        <main class="md:col-span-8">
-            <div class="mb-4 relative">
-                <input type="text" id="searchInput" oninput="handleSearch()" placeholder="Search titles..." 
-                       class="w-full border border-tan rounded-lg p-3.5 pl-10 text-sm outline-none shadow-sm focus:ring-2 focus:ring-tan/30 transition-all">
-                <span class="absolute left-3.5 top-3.5 text-stone-400">🔍</span>
+        <main class="lg:col-span-9">
+            <div class="mb-6 relative">
+                <input type="text" id="searchInput" oninput="handleSearch()" placeholder="Search by title or author..." 
+                       class="w-full border-2 border-stone-200 rounded-md p-4 pl-12 focus:border-stone-400 outline-none transition-all italic">
+                <span class="absolute left-4 top-4 opacity-30 text-xl">🔍</span>
             </div>
             
-            <div id="mangaGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4 h-[70vh] overflow-y-auto pr-2">
-                <!-- Data injected here -->
-            </div>
+            <div id="bookGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 h-[75vh] overflow-y-auto pr-4">
+                </div>
         </main>
     </div>
 </div>
 
 <script>
-    // Since this HTML is hosted on the same domain as the Worker, 
-    // we fetch from /api (or whatever path your index.js is listening to)
     const API_URL = "/api"; 
-    
-    let mangaData = [];
+    let bookData = [];
     let chartInstance = null;
 
     async function loadFromNotion() {
-        const grid = document.getElementById("mangaGrid");
+        const grid = document.getElementById("bookGrid");
         const syncText = document.getElementById("syncText");
         
         grid.innerHTML = `
-            <div class="col-span-full flex flex-col items-center justify-center py-20 text-stone-400">
-                <div class="animate-spin text-3xl mb-4">📖</div>
-                <div class="italic text-sm">Consulting the Notion Archives...</div>
+            <div class="col-span-full flex flex-col items-center justify-center py-24 text-stone-400">
+                <div class="animate-bounce text-4xl mb-4">🕯️</div>
+                <div class="italic">Browsing the shelves...</div>
             </div>`;
 
         try {
-            const resp = await fetch(API_URL, { 
-                method: 'GET',
-                headers: { 'Accept': 'application/json' }
-            });
-
+            const resp = await fetch(API_URL);
             if (!resp.ok) throw new Error(`HTTP Error ${resp.status}`);
-
-            const contentType = resp.headers.get("content-type") || "";
-            if (!contentType.includes("application/json")) {
-                throw new Error("Worker is still returning HTML. Please check the wrangler.jsonc 'main' field.");
-            }
 
             const data = await resp.json();
             if (data.error) throw new Error(data.error);
 
-            mangaData = (data.results || []).map(page => ({
+            // Mapping to your new Column Names: Title, Author, Status, Date finished
+            bookData = (data.results || []).map(page => ({
                 id: page.id,
-                name: page.properties.Name?.title[0]?.plain_text || "Untitled Entry",
-                status: page.properties.Status?.select?.name || "Plan to Read",
-                ch: page.properties.Chapters?.number || 0 
+                title: page.properties.Title?.title[0]?.plain_text || "Untitled Book",
+                author: page.properties.Author?.rich_text[0]?.plain_text || "Unknown Author",
+                status: page.properties.Status?.select?.name || "To Read",
+                dateFinished: page.properties["Date finished"]?.date?.start || null
             }));
 
-            syncText.innerText = `✨ ${mangaData.length} items synced`;
+            syncText.innerText = `✨ ${bookData.length} volumes indexed`;
             render();
         } catch (err) {
             console.error(err);
-            grid.innerHTML = `
-                <div class="col-span-full p-8 bg-red-50 rounded-lg border border-red-200">
-                    <p class="text-red-800 font-bold mb-1">Worker Response Error</p>
-                    <p class="text-red-600 text-xs mb-4 italic">${err.message}</p>
-                    <div class="bg-white p-3 rounded text-[10px] text-gray-500 space-y-2">
-                        <p><b>Configuration Fix Required:</b></p>
-                        <p>1. Move <code>index.html</code> into a folder called <code>public</code>.</p>
-                        <p>2. Move <code>index.js</code> out of <code>functions</code> and into the root.</p>
-                        <p>3. Set <code>"main": "index.js"</code> and <code>"directory": "public"</code> in <code>wrangler.jsonc</code>.</p>
-                    </div>
-                </div>
-            `;
+            grid.innerHTML = `<div class="col-span-full p-6 bg-red-50 text-red-800 rounded border border-red-100 italic text-center">${err.message}</div>`;
         }
     }
 
-    function render(data = mangaData) {
-        const grid = document.getElementById("mangaGrid");
+    function render(data = bookData) {
+        const grid = document.getElementById("bookGrid");
         grid.innerHTML = "";
         
-        data.sort((a, b) => a.name.localeCompare(b.name)).forEach(m => {
+        // Sorting by Date Finished (Newest first) or Title
+        data.sort((a, b) => {
+            if (a.dateFinished && b.dateFinished) return new Date(b.dateFinished) - new Date(a.dateFinished);
+            return a.title.localeCompare(b.title);
+        }).forEach(book => {
             const card = document.createElement("div");
-            card.className = "library-card p-4 flex flex-col justify-between h-40 " + getBorder(m.status);
+            card.className = "book-card p-5 flex flex-col justify-between min-h-[180px]";
+            
+            const dateStr = book.dateFinished ? new Date(book.dateFinished).toLocaleDateString() : "In Progress";
+
             card.innerHTML = `
                 <div>
-                    <span class="status-pill ${getPill(m.status)}">${m.status}</span>
-                    <h3 class="font-bold text-stone-800 text-sm mt-3 leading-tight line-clamp-2">${m.name}</h3>
+                    <div class="flex justify-between items-start mb-3">
+                        <span class="status-pill ${getPill(book.status)}">${book.status}</span>
+                    </div>
+                    <h3 class="font-bold text-lg leading-tight text-stone-800 line-clamp-2">${book.title}</h3>
+                    <p class="text-sm text-stone-500 italic mt-1 font-serif">by ${book.author}</p>
                 </div>
-                <div class="flex justify-between items-center text-[11px] text-stone-400 border-t border-stone-50 pt-3 italic">
-                    <span>Progress</span>
-                    <span class="font-bold text-stone-700 bg-stone-100 px-2 py-0.5 rounded">Ch. ${m.ch}</span>
+                <div class="mt-4 pt-3 border-t border-stone-50 flex justify-between items-center">
+                    <span class="text-[10px] uppercase font-bold tracking-widest text-stone-400">Finished</span>
+                    <span class="text-[11px] font-medium text-stone-600">${dateStr}</span>
                 </div>
             `;
             grid.appendChild(card);
@@ -137,53 +125,10 @@
 
     function getPill(s) {
         const st = (s || "").toLowerCase();
-        if (st.includes("reading")) return "bg-blue-100 text-blue-700";
-        if (st.includes("read") || st.includes("complete")) return "bg-emerald-100 text-emerald-700";
-        if (st.includes("stalled") || st.includes("hold")) return "bg-orange-100 text-orange-700";
-        return "bg-stone-100 text-stone-600";
-    }
-
-    function getBorder(s) {
-        const st = (s || "").toLowerCase();
-        if (st.includes("reading")) return "border-l-blue-400";
-        if (st.includes("read") || st.includes("complete")) return "border-l-emerald-400";
-        if (st.includes("stalled") || st.includes("hold")) return "border-l-orange-400";
-        return "border-l-stone-300";
+        if (st.includes("reading")) return "bg-amber-100 text-amber-800";
+        if (st.includes("finished") || st.includes("done") || st.includes("read")) return "bg-emerald-100 text-emerald-800";
+        return "bg-stone-100 text-stone-600 border border-stone-200";
     }
 
     function handleSearch() {
         const term = document.getElementById("searchInput").value.toLowerCase();
-        render(mangaData.filter(m => m.name.toLowerCase().includes(term)));
-    }
-
-    function updateChart() {
-        const ctx = document.getElementById("statusChart").getContext("2d");
-        const stats = mangaData.reduce((acc, m) => { 
-            const s = m.status || "Other";
-            acc[s] = (acc[s] || 0) + 1; 
-            return acc; 
-        }, {});
-        
-        if (chartInstance) chartInstance.destroy();
-        chartInstance = new Chart(ctx, {
-            type: "doughnut",
-            data: {
-                labels: Object.keys(stats),
-                datasets: [{
-                    data: Object.values(stats),
-                    backgroundColor: ["#80BCBD", "#AAD9BB", "#D5F0C1", "#F9F7C9", "#E5E7EB", "#D2B48C"]
-                }]
-            },
-            options: { 
-                responsive: true, 
-                maintainAspectRatio: false, 
-                plugins: { legend: { position: "bottom", labels: { font: { size: 10 } } } },
-                cutout: "70%"
-            }
-        });
-    }
-
-    document.addEventListener("DOMContentLoaded", loadFromNotion);
-</script>
-</body>
-</html>
