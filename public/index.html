@@ -57,7 +57,10 @@
     let bookData = [];
     let chartInstance = null;
 
+    window.onload = loadFromNotion;
+
     async function loadFromNotion() {
+        console.log("Contacting the library stacks...");
         const grid = document.getElementById("bookGrid");
         const syncText = document.getElementById("syncText");
         
@@ -69,16 +72,14 @@
 
         try {
             const resp = await fetch(API_URL);
-            if (!resp.ok) throw new Error(`HTTP Error ${resp.status}`);
+            if (!resp.ok) throw new Error(`Notion connection failed (${resp.status})`);
 
             const data = await resp.json();
-            if (data.error) throw new Error(data.error);
-
-            // Mapping to your new Column Names: Title, Author, Status, Date finished
+            
             bookData = (data.results || []).map(page => ({
                 id: page.id,
-                title: page.properties.Title?.title[0]?.plain_text || "Untitled Book",
-                author: page.properties.Author?.rich_text[0]?.plain_text || "Unknown Author",
+                title: page.properties.Title?.title[0]?.plain_text || "Untitled",
+                author: page.properties.Author?.rich_text[0]?.plain_text || "Unknown",
                 status: page.properties.Status?.select?.name || "To Read",
                 dateFinished: page.properties["Date finished"]?.date?.start || null
             }));
@@ -87,7 +88,7 @@
             render();
         } catch (err) {
             console.error(err);
-            grid.innerHTML = `<div class="col-span-full p-6 bg-red-50 text-red-800 rounded border border-red-100 italic text-center">${err.message}</div>`;
+            grid.innerHTML = `<div class="col-span-full p-6 bg-red-50 text-red-800 rounded border border-red-100 italic text-center">Error: ${err.message}</div>`;
         }
     }
 
@@ -95,14 +96,12 @@
         const grid = document.getElementById("bookGrid");
         grid.innerHTML = "";
         
-        // Sorting by Date Finished (Newest first) or Title
         data.sort((a, b) => {
             if (a.dateFinished && b.dateFinished) return new Date(b.dateFinished) - new Date(a.dateFinished);
             return a.title.localeCompare(b.title);
         }).forEach(book => {
             const card = document.createElement("div");
             card.className = "book-card p-5 flex flex-col justify-between min-h-[180px]";
-            
             const dateStr = book.dateFinished ? new Date(book.dateFinished).toLocaleDateString() : "In Progress";
 
             card.innerHTML = `
@@ -114,21 +113,55 @@
                     <p class="text-sm text-stone-500 italic mt-1 font-serif">by ${book.author}</p>
                 </div>
                 <div class="mt-4 pt-3 border-t border-stone-50 flex justify-between items-center">
-                    <span class="text-[10px] uppercase font-bold tracking-widest text-stone-400">Finished</span>
+                    <span class="text-[10px] uppercase font-bold tracking-widest text-stone-400">Status</span>
                     <span class="text-[11px] font-medium text-stone-600">${dateStr}</span>
                 </div>
             `;
             grid.appendChild(card);
         });
-        updateChart();
+        updateChart(data);
     }
 
     function getPill(s) {
         const st = (s || "").toLowerCase();
         if (st.includes("reading")) return "bg-amber-100 text-amber-800";
-        if (st.includes("finished") || st.includes("done") || st.includes("read")) return "bg-emerald-100 text-emerald-800";
+        if (st.includes("read") || st.includes("done")) return "bg-emerald-100 text-emerald-800";
         return "bg-stone-100 text-stone-600 border border-stone-200";
     }
 
     function handleSearch() {
         const term = document.getElementById("searchInput").value.toLowerCase();
+        const filtered = bookData.filter(b => 
+            b.title.toLowerCase().includes(term) || b.author.toLowerCase().includes(term)
+        );
+        render(filtered);
+    }
+
+    function updateChart(data) {
+        const ctx = document.getElementById('statusChart').getContext('2d');
+        const counts = data.reduce((acc, book) => {
+            acc[book.status] = (acc[book.status] || 0) + 1;
+            return acc;
+        }, {});
+
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(counts),
+                datasets: [{
+                    data: Object.values(counts),
+                    backgroundColor: ['#C5A059', '#5D4037', '#A1887F', '#D2B48C'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { font: { family: 'Georgia' } } } }
+            }
+        });
+    }
+</script>
+</body>
+</html>
