@@ -78,10 +78,11 @@
             
             bookData = (data.results || []).map(page => ({
                 id: page.id,
-                title: page.properties.Title?.title[0]?.plain_text || "Untitled",
-                author: page.properties.Author?.rich_text[0]?.plain_text || "Unknown",
+                title: page.properties.Title?.title?.[0]?.plain_text || "Untitled",
+    // This handles the Multi-select format for Authors
+                author: page.properties.Author?.multi_select?.map(a => a.name).join(", ") || "Unknown Author",
                 status: page.properties.Status?.select?.name || "To Read",
-                dateFinished: page.properties["Date finished"]?.date?.start || null
+        dateFinished: page.properties["Date finished"]?.date?.start || null
             }));
 
             syncText.innerText = `✨ ${bookData.length} volumes indexed`;
@@ -136,7 +137,7 @@
         );
         render(filtered);
     }
-
+    
     function updateChart(data) {
         const ctx = document.getElementById('statusChart').getContext('2d');
         const counts = data.reduce((acc, book) => {
